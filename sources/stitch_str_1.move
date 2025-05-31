@@ -30,10 +30,7 @@ fun init(otw: STITCH_STR_1, ctx: &mut TxContext) {
     // Freeze the meta data so its immutable
     transfer::public_freeze_object(metadata);
 
-    // freeze the treasury so its immutable
-    transfer::public_freeze_object(treasury);
-
-    // transfer::public_transfer(treasury, ctx.sender());
+    transfer::public_transfer(treasury, ctx.sender());
 }
 
 // mint function is used to mint STITCH coins to a recipient
