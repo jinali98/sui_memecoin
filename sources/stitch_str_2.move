@@ -65,3 +65,29 @@ public fun mint(
     let coin = coin::mint(treasury, amount, ctx);
     transfer::public_transfer(coin, recipient);
 }
+
+#[test_only]
+use sui::test_scenario::{Self, Scenario};
+
+#[test]
+fun test_init() {
+    let publisher = @0xA1;
+
+    let mut scenario = test_scenario::begin(publisher);
+    {
+        let otw = STITCH_STR_2 {};
+
+        init(otw, scenario.ctx());
+    };
+    scenario.next_tx(publisher);
+    {
+        let mint_cap = scenario.take_from_sender<MintCap>();
+        let stitch_coins = scenario.take_from_sender<coin::Coin<STITCH_STR_2>>();
+
+        assert!(mint_cap.minted_amount == INITIAL_SUPPLY, 0);
+
+        scenario.return_to_sender(mint_cap);
+        scenario.return_to_sender(stitch_coins);
+    };
+    scenario.end();
+}
