@@ -2,6 +2,7 @@ module sui_memecoin::stitch_str_2;
 
 use sui::coin::{Self, TreasuryCap};
 use sui::url::new_unsafe_from_bytes;
+use sui_memecoin::stitch;
 
 const TOTAL_SUPPLY: u64 = 100_000_000_000;
 const INITIAL_SUPPLY: u64 = 10_000_000_000;
@@ -68,7 +69,6 @@ public fun mint(
 
 #[test_only]
 use sui::test_scenario::{Self, Scenario};
-
 #[test]
 fun test_init() {
     let publisher = @0xA1;
@@ -84,10 +84,23 @@ fun test_init() {
         let mint_cap = scenario.take_from_sender<MintCap>();
         let stitch_coins = scenario.take_from_sender<coin::Coin<STITCH_STR_2>>();
 
-        assert!(mint_cap.minted_amount == INITIAL_SUPPLY, 0);
+        assert!(mint_cap.minted_amount == INITIAL_SUPPLY, EInvalidAmount);
+        assert!(stitch_coins.balance().value() == INITIAL_SUPPLY, EInvalidAmount);
 
         scenario.return_to_sender(mint_cap);
         scenario.return_to_sender(stitch_coins);
+    };
+    scenario.next_tx(publisher);
+    {
+        let mut mint_cap = scenario.take_from_sender<MintCap>();
+        let mut treasury_cap = scenario.take_from_sender<TreasuryCap<STITCH_STR_2>>();
+
+        mint(&mut treasury_cap, &mut mint_cap, 1000000000, publisher, scenario.ctx());
+
+        assert!(mint_cap.minted_amount == INITIAL_SUPPLY + 1000000000, EInvalidAmount);
+
+        scenario.return_to_sender(mint_cap);
+        scenario.return_to_sender(treasury_cap);
     };
     scenario.end();
 }
