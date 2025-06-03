@@ -102,5 +102,17 @@ fun test_init() {
         scenario.return_to_sender(mint_cap);
         scenario.return_to_sender(treasury_cap);
     };
+        scenario.next_tx(publisher);
+    {
+        let mut mint_cap = scenario.take_from_sender<MintCap>();
+        let mut treasury_cap = scenario.take_from_sender<TreasuryCap<STITCH_STR_2>>();
+
+        mint(&mut treasury_cap, &mut mint_cap, 1000000000, publisher, scenario.ctx());
+
+        assert!(mint_cap.minted_amount == TOTAL_SUPPLY, EInvalidAmount);
+
+        scenario.return_to_sender(mint_cap);
+        scenario.return_to_sender(treasury_cap);
+    };
     scenario.end();
 }
