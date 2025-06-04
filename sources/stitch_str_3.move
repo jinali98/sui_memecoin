@@ -1,10 +1,10 @@
 module sui_memecoin::stitch_str_3;
 
+use bridge::treasury;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, TreasuryCap};
 use sui::url::new_unsafe_from_bytes;
-use sui_memecoin::stitch;
 
 const TOTAL_SUPPLY: u64 = 100_000_000_000;
 const INITIAL_SUPPLY: u64 = 10_000_000_000;
@@ -12,11 +12,13 @@ const INITIAL_SUPPLY: u64 = 10_000_000_000;
 // ---Error codes---
 const EInvalidAmount: u64 = 0;
 const EInsufficientSupply: u64 = 1;
+const EInvalidTime: u64 = 2;
 
 public struct STITCH_STR_3 has drop {}
 
 public struct MintCap has key, store {
     id: UID,
+    treasury_cap: TreasuryCap<STITCH_STR_3>,
     minted_amount: u64,
 }
 
@@ -28,7 +30,7 @@ public struct CoinLocker has key, store {
 }
 
 fun init(otw: STITCH_STR_3, ctx: &mut TxContext) {
-    let (mut treasury, metadata) = coin::create_currency(
+    let (treasury, metadata) = coin::create_currency(
         otw,
         9,
         b"STITCH_STR_3",
@@ -44,34 +46,43 @@ fun init(otw: STITCH_STR_3, ctx: &mut TxContext) {
 
     let mut mint_cap = MintCap {
         id: object::new(ctx),
+        treasury_cap: treasury,
         minted_amount: 0,
     };
 
-    token_minting_handler(&mut treasury, &mut mint_cap, INITIAL_SUPPLY, ctx.sender(), ctx);
+    token_minting_handler(&mut mint_cap, INITIAL_SUPPLY, ctx.sender(), ctx);
 
     transfer::public_freeze_object(metadata);
 
     // transfer the mint cap to the creator
     transfer::public_transfer(mint_cap, ctx.sender());
-
-    // transfer the treasury to the creator for future use
-    transfer::public_transfer(treasury, ctx.sender());
 }
 
 // mint function is used to mint coins to a recipient
 public fun token_minting_handler(
-    treasury: &mut TreasuryCap<STITCH_STR_3>,
     mint_cap: &mut MintCap,
     amount: u64,
     recipient: address,
     ctx: &mut TxContext,
 ) {
-    let coin = mint_tokens(treasury, mint_cap, amount, ctx);
+    let coin = mint_tokens(mint_cap, amount, ctx);
     transfer::public_transfer(coin, recipient);
 }
 
+public fun release_locked_tokens(
+    locker: &mut CoinLocker,
+    recipient: address,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(locker.unlock_time <= clock.timestamp_ms(), EInvalidTime);
+    let locked_balance = locker.balance.value();
+
+    let unlocked_amount = coin::take(&mut locker.balance, locked_balance, ctx);
+    transfer::public_transfer(unlocked_amount, recipient)
+}
+
 fun mint_tokens(
-    treasury: &mut TreasuryCap<STITCH_STR_3>,
     mint_cap: &mut MintCap,
     amount: u64,
     ctx: &mut TxContext,
@@ -79,13 +90,14 @@ fun mint_tokens(
     assert!(amount > 0, EInvalidAmount);
     assert!(mint_cap.minted_amount + amount <= TOTAL_SUPPLY, EInsufficientSupply);
 
+    let treasury = &mut mint_cap.treasury_cap;
+
     let coin = coin::mint(treasury, amount, ctx);
     mint_cap.minted_amount = mint_cap.minted_amount + amount;
     coin
 }
 
 fun mint_and_lock(
-    treasury: &mut TreasuryCap<STITCH_STR_3>,
     mint_cap: &mut MintCap,
     amount: u64,
     duration: u64, // in milliseconds
@@ -93,7 +105,7 @@ fun mint_and_lock(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let coin = mint_tokens(treasury, mint_cap, amount, ctx);
+    let coin = mint_tokens(mint_cap, amount, ctx);
     let current_date = clock.timestamp_ms();
     let unlock_date = current_date + duration;
 
