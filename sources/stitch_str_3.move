@@ -1,6 +1,7 @@
 module sui_memecoin::stitch_str_3;
 
 use sui::balance::{Self, Balance};
+use sui::clock::{Self, Clock};
 use sui::coin::{Self, TreasuryCap};
 use sui::url::new_unsafe_from_bytes;
 use sui_memecoin::stitch;
@@ -22,6 +23,7 @@ public struct MintCap has key, store {
 public struct CoinLocker has key, store {
     id: UID,
     balance: Balance<STITCH_STR_3>,
+    // in milliseconds
     unlock_time: u64,
 }
 
@@ -80,6 +82,28 @@ fun mint_tokens(
     let coin = coin::mint(treasury, amount, ctx);
     mint_cap.minted_amount = mint_cap.minted_amount + amount;
     coin
+}
+
+fun mint_and_lock(
+    treasury: &mut TreasuryCap<STITCH_STR_3>,
+    mint_cap: &mut MintCap,
+    amount: u64,
+    duration: u64, // in milliseconds
+    recipient: address,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let coin = mint_tokens(treasury, mint_cap, amount, ctx);
+    let current_date = clock.timestamp_ms();
+    let unlock_date = current_date + duration;
+
+    let locker = CoinLocker {
+        id: object::new(ctx),
+        balance: coin::into_balance(coin),
+        unlock_time: unlock_date,
+    };
+
+    transfer::public_transfer(locker, recipient);
 }
 
 #[test_only]
